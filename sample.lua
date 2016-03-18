@@ -127,8 +127,8 @@ function sample()
     -- local token_count = torch.zeros(#idx2word)
     -- local token_loss = torch.zeros(#idx2word)
     local rnn_state = {[0] = init_state}   
-    local x = torch.zeros(T)
-    local x_char = torch.zeros(T, loader.max_word_l) 
+    local x = torch.ones(2, T)
+    local x_char = torch.ones(2, T, loader.max_word_l) 
     -- local x, y, x_char = loader:next_batch(split_idx)
     local scores, first_t
     first_t = 1
@@ -181,11 +181,13 @@ function sample()
             return chars
         end
 
-        x[t]=next_word
+        x[1][t]=next_word
+        x[2][t]=next_word
         chars = split_word(next_word)
-	print(loader.max_word_l)
+	    print(loader.max_word_l)
         for i = 1, math.min(#chars, loader.max_word_l) do
-            x_char[t][i] = chars[i]
+            x_char[1][t][i] = chars[i]
+            x_char[2][t][i] = chars[i]
         end
     	local lst = protos.rnn:forward(get_input(x, x_char, t, rnn_state[0]))
     	rnn_state[0] = {}
