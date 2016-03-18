@@ -23,17 +23,16 @@ local stringx = require('pl.stringx')
 cmd = torch.CmdLine()
 cmd:text('Options')
 -- data
-cmd:option('-', 0.5, 'similarity between sampled words and ground-truth paragraph')
 cmd:option('-savefile', 'sample_results.t7', 'save results to')
 cmd:option('-model', 'en-large-word-model.t7', 'model checkpoint file')
 -- GPU/CPU these params must be passed in because it affects the constructors
 cmd:option('-gpuid', -1,'which gpu to use. -1 = use CPU')
 cmd:option('-cudnn', 0,'use cudnn (1 = yes, 0 = no)')
-cmd:option('length', 100, 'length of sampled text')
-cmd:option('start_text', '', 'the start of text')
-cmd:option('verbose', 0, 'the char num of start text')
-cmd:option('sample', 1, 'sample or not')
-cmd:option('temperature', 1, 'sample temperature')
+cmd:option('-length', 100, 'length of sampled text')
+cmd:option('-start_text', '', 'the start of text')
+cmd:option('-verbose', 0, 'the char num of start text')
+cmd:option('-sample', 1, 'sample or not')
+cmd:option('-temperature', 1, 'sample temperature')
 
 cmd:text()
 
@@ -146,16 +145,14 @@ function sample()
         if verbose > 0 then
             print('Seeding with uniform probabilities')
         end
-        local w = protos.criterion.weight
-        scores = w.new(1, 1, #ind2word):fill(1)
+        scores = torch.ones(1, #idx2word)
         first_t = 1
     end
 
-    -- if opt.gpuid >= 0 then
-    --     x = x:float():cuda()
-    --     y = y:float():cuda()
-	   --  x_char = x_char:float():cuda()
-    -- end
+    if opt.gpuid >= 0 then
+        x = x:float():cuda()
+        x_char = x_char:float():cuda()
+    end
     protos.rnn:evaluate() 
 
     local _, next_word = nil, nil
@@ -166,13 +163,15 @@ function sample()
         else
             local probs = torch.div(scores, temperature):double():exp():squeeze()
             probs:div(torch.sum(probs))
-            next_char = torch.multinomial(probs, 1):view(1, 1)
+            next_word = torch.multinomial(probs, 1):view(1, 1)
         end
         sampled[{{}, {t, t}}]:copy(next_word)
 
         function split_word(wordind)
             local chars = {char2idx[tokens.START]}
-            word = ind2word[wordind]
+            word = idx2word[wordind[1][1]]
+
+	    local l = utf8.len(word)
             local _, char = nil, nil
             for _, char in utf8.next, word do
                 char = utf8.char(char)
@@ -184,14 +183,15 @@ function sample()
 
         x[t]=next_word
         chars = split_word(next_word)
-        for i = 1, math.min(#chars, max_word_l) do
+	print(loader.max_word_l)
+        for i = 1, math.min(#chars, loader.max_word_l) do
             x_char[t][i] = chars[i]
         end
     	local lst = protos.rnn:forward(get_input(x, x_char, t, rnn_state[0]))
     	rnn_state[0] = {}
     	for i=1,#init_state do table.insert(rnn_state[0], lst[i]) end
     	prediction = lst[#lst] 
-        for i = 1, #ind2word do
+        for i = 1, #idx2word do
             scores[i] = protos.criterion:forward(prediction, i)
         end
     end
@@ -200,7 +200,7 @@ function sample()
         local s = ''
         for i = 1, encoded:size(1) do
             local ind = encoded[i]
-            local token = ind2word[ind]
+            local token = idx2word[ind]
             s = s .. token
         end
         return s
