@@ -58,16 +58,16 @@ LSTMTDNN = require 'model.LSTMTDNN'
 checkpoint = torch.load(opt2.model)
 opt = checkpoint.opt
 protos = checkpoint.protos
-print('opt: ')
-print(opt)
-print('val_losses: ')
-print(checkpoint.val_losses)
+--print('opt: ')
+--print(opt)
+--print('val_losses: ')
+--print(checkpoint.val_losses)
 idx2word, word2idx, idx2char, char2idx = table.unpack(checkpoint.vocab)
 
 -- recreate the data loader class
 loader = BatchLoader.create(opt.data_dir, opt.batch_size, opt.seq_length, opt.padding, opt.max_word_l)
-print('Word vocab size: ' .. #loader.idx2word .. ', Char vocab size: ' .. #loader.idx2char
-	    .. ', Max word length (incl. padding): ', loader.max_word_l)
+--print('Word vocab size: ' .. #loader.idx2word .. ', Char vocab size: ' .. #loader.idx2char
+--	    .. ', Max word length (incl. padding): ', loader.max_word_l)
 
 -- the initial state of the cell/hidden states
 init_state = {}
@@ -129,6 +129,7 @@ function sample()
     local rnn_state = {[0] = init_state}   
     local x = torch.ones(2, T)
     local x_char = torch.ones(2, T, loader.max_word_l) 
+    local y = torch.ones(2)
     -- local x, y, x_char = loader:next_batch(split_idx)
     local scores, first_t
     first_t = 1
@@ -152,6 +153,7 @@ function sample()
     if opt.gpuid >= 0 then
         x = x:float():cuda()
         x_char = x_char:float():cuda()
+	y = y:float():cuda()
     end
     protos.rnn:evaluate() 
 
@@ -184,17 +186,33 @@ function sample()
         x[1][t]=next_word
         x[2][t]=next_word
         chars = split_word(next_word)
-	    print(loader.max_word_l)
+	    --print(loader.max_word_l)
         for i = 1, math.min(#chars, loader.max_word_l) do
             x_char[1][t][i] = chars[i]
             x_char[2][t][i] = chars[i]
         end
-    	local lst = protos.rnn:forward(get_input(x, x_char, t, rnn_state[0]))
-    	rnn_state[0] = {}
-    	for i=1,#init_state do table.insert(rnn_state[0], lst[i]) end
-    	prediction = lst[#lst] 
-        for i = 1, #idx2word do
-            scores[i] = protos.criterion:forward(prediction, i)
+	print(get_input(x, x_char, t, rnn_state[0]))
+	print(get_input(x, x_char, t, rnn_state[0])[1])
+	tmp=get_input(x,x_char,t,rnn_state[0])
+	tmp[1]=torch.ones(2, loader.max_word_l):float():cuda()
+	tmp[1][1][1]=2
+	tmp[1][2][1]=2
+	tmp[1][1][2]=8
+	tmp[1][2][2]=8
+	tmp[1][1][3]=10
+	tmp[1][2][3]=10
+	tmp[1][1][4]=3
+	tmp[1][2][4]=3
+	print(tmp[1])
+	local lst = protos.rnn:forward(tmp)
+        rnn_state[0] = {}
+        for i=1,#init_state do table.insert(rnn_state[0], lst[i]) end
+        prediction = lst[#lst]
+	for ytmp = 79, 79 do
+	    y[1]=ytmp
+	    y[2]=ytmp 
+	    print(y)
+            scores[ytmp] = protos.criterion:updateOutput(prediction, y) 
         end
     end
     function decode(encoded)
