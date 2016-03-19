@@ -30,7 +30,6 @@ cmd:option('-gpuid', -1,'which gpu to use. -1 = use CPU')
 cmd:option('-cudnn', 0,'use cudnn (1 = yes, 0 = no)')
 cmd:option('-length', 100, 'length of sampled text')
 cmd:option('-start_text', '', 'the start of text')
-cmd:option('-verbose', 0, 'the char num of start text')
 cmd:option('-sample', 1, 'sample or not')
 cmd:option('-temperature', 1, 'sample temperature')
 
@@ -106,6 +105,19 @@ function get_input(x, x_char, t, prev_states)
     return u
 end
 
+function split_word(wordind)
+    local chars = {char2idx[tokens.START]}
+    word = idx2word[wordind[1][1]]
+    local l = utf8.len(word)
+    local _, char = nil, nil
+    for _, char in utf8.next, word do
+        char = utf8.char(char)
+        chars[#chars + 1] = char2idx[char]
+    end
+    chars[#chars + 1] = char2idx[tokens.END]
+    return chars
+end
+
 --[[
 Sample from the language model
 
@@ -115,7 +127,6 @@ Inputs:
 function sample()
     local T = opt2.length
     local start_text = opt2.start_text
-    local verbose = opt2.verbose
     local sample = opt2.sample
     local temperature = opt2.temperature
     local sampled = torch.LongTensor(1, opt2.length)
@@ -133,20 +144,42 @@ function sample()
     local scores, first_t
     first_t = 1
     if #start_text > 0 then
-        if verbose > 0 then
-            print('Seeding with: "' .. start_text .. '"')
+        print('Seeding with: "' .. start_text .. '"')
+        start_text = string.replace(start_text, '<unk>', tokens.UNK)
+        start_text = string.replace(start_text, tokens.START, '')
+        start_text = string.replace(start_text, tokens.END, '')
+        for word in start_text:gmatch'([^%s]+)' do
+            if string.sub(word, 1, 1) == tokens.UNK and word:len() > 1 then
+                word = string.sub(word, 3)
+                x[1][first_t] = word2idx[tokens.UNK]
+                x[2][first_t] = word2idx[tokens.UNK]
+            end
+            else
+                if word2idx[word] == nil then
+                    idx2word[#idx2word + 1] = word
+                    word2idx[word] = #idx2word
+                end
+                x[1][first_t] = word2idx[word]
+                x[2][first_t] = word2idx[word]
+            end
+            chars = split_word(next_word)
+            for i = 1, math.min(#chars, loader.max_word_l) do
+                x_char[1][first_t][i] = chars[i]
+                x_char[2][first_t][i] = chars[i]
+            end
+            first_t = first_t + 1
         end
-        -- local x = self:encode_string(start_text):view(1, -1)
-        -- local T0 = x:size(2)
-        -- sampled[{{}, {1, T0}}]:copy(x)
-        -- scores = self:forward(x)[{{}, {T0, T0}}]
-        -- first_t = T0 + 1
+        for t = 1, first_t-1 do
+            local lst = protos.rnn:forward(get_input(x, x_char, t, rnn_state[0]))
+            rnn_state[0] = {}
+            for i=1,#init_state do table.insert(rnn_state[0], lst[i]) end
+        end
+        prediction = lst[#lst] 
+        for i = 1, #idx2word do
+            scores[1][i] = -protos.criterion:forward(prediction, i)
+        end
     else
-        if verbose > 0 then
-            print('Seeding with uniform probabilities')
-        end
         scores = torch.ones(1, #idx2word)
-        first_t = 1
     end
 
     if opt.gpuid >= 0 then
@@ -167,20 +200,6 @@ function sample()
         end
         sampled[{{}, {t, t}}]:copy(next_word)
 
-        function split_word(wordind)
-            local chars = {char2idx[tokens.START]}
-            word = idx2word[wordind[1][1]]
-
-	    local l = utf8.len(word)
-            local _, char = nil, nil
-            for _, char in utf8.next, word do
-                char = utf8.char(char)
-                chars[#chars + 1] = char2idx[char]
-            end
-            chars[#chars + 1] = char2idx[tokens.END]
-            return chars
-        end
-
         x[1][t]=next_word
         x[2][t]=next_word
         chars = split_word(next_word)
@@ -196,13 +215,6 @@ function sample()
         for i = 1, #idx2word do
             scores[1][i] = -protos.criterion:forward(prediction, i)
         end
---[[	for i = 1, #idx2word do
-	    print(scores[1][i])
-	    print(prediction[1][i])
-	    io.read()
-	end
-	io.read()
---]]
     end
     function decode(encoded)
         assert(torch.isTensor(encoded) and encoded:dim() == 1)

@@ -63,7 +63,7 @@ idx2word, word2idx, idx2char, char2idx = table.unpack(checkpoint.vocab)
 -- recreate the data loader class
 loader = BatchLoader.create(opt.data_dir, opt.batch_size, opt.seq_length, opt.padding, opt.max_word_l)
 print('Word vocab size: ' .. #loader.idx2word .. ', Char vocab size: ' .. #loader.idx2char
-	    .. ', Max word length (incl. padding): ', loader.max_word_l)
+        .. ', Max word length (incl. padding): ', loader.max_word_l)
 
 -- the initial state of the cell/hidden states
 init_state = {}
@@ -115,24 +115,20 @@ function eval_split_full(split_idx)
     local x, y, x_char = loader:next_batch(split_idx)
     if opt.gpuid >= 0 then
         x = x:float():cuda()
-	y = y:float():cuda()
-	x_char = x_char:float():cuda()
+    y = y:float():cuda()
+    x_char = x_char:float():cuda()
     end
     protos.rnn:evaluate() 
     for t = 1, x:size(2) do
-	print(get_input(x, x_char, t, rnn_state[0])[1])
-	local lst = protos.rnn:forward(get_input(x, x_char, t, rnn_state[0]))
-	rnn_state[0] = {}
-	for i=1,#init_state do table.insert(rnn_state[0], lst[i]) end
-	prediction = lst[#lst] 
-	print(y[{{1,2},t}])
-	io.read()
-	local singleton_loss = protos.criterion:forward(prediction, y[{{1,2},t}])
-	print(protos.criterion.output_tensor)
-	loss = loss + singleton_loss
-	local token_idx = x[1][t]
-	token_count[token_idx] = token_count[token_idx] + 1
-	token_loss[token_idx] = token_loss[token_idx] + singleton_loss
+    local lst = protos.rnn:forward(get_input(x, x_char, t, rnn_state[0]))
+    rnn_state[0] = {}
+    for i=1,#init_state do table.insert(rnn_state[0], lst[i]) end
+    prediction = lst[#lst] :
+    local singleton_loss = protos.criterion:forward(prediction, y[{{1,2},t}])
+    loss = loss + singleton_loss
+    local token_idx = x[1][t]
+    token_count[token_idx] = token_count[token_idx] + 1
+    token_loss[token_idx] = token_loss[token_idx] + singleton_loss
     end
     loss = loss / x:size(2)
     local total_perp = torch.exp(loss)    
