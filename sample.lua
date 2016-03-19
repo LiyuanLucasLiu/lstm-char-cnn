@@ -141,35 +141,39 @@ function sample()
     local x_char = torch.ones(2, T, loader.max_word_l) 
     -- local x, y, x_char = loader:next_batch(split_idx)
     local scores, first_t
+    local _, next_word = nil, nil
     first_t = 1
+    scores = torch.ones(1, #idx2word)
     if #start_text > 0 then
         print('Seeding with: "' .. start_text .. '"')
-        start_text = string.replace(start_text, '<unk>', tokens.UNK)
-        start_text = string.replace(start_text, tokens.START, '')
-        start_text = string.replace(start_text, tokens.END, '')
-        for word in start_text:gmatch'([^%s]+)' do
-            if string.sub(word, 1, 1) == tokens.UNK and word:len() > 1 then
+        start_text = stringx.replace(start_text, '<unk>', tokens.UNK)
+        start_text = stringx.replace(start_text, tokens.START, '')
+        start_text = stringx.replace(start_text, tokens.END, '')
+        for word in start_text:gmatch'([^%s]+)' do 
+	    next_word = torch.LongTensor(1, 1)
+	    if string.sub(word, 1, 1) == tokens.UNK and word:len() > 1 then
                 word = string.sub(word, 3)
-                x[1][first_t] = word2idx[tokens.UNK]
-                x[2][first_t] = word2idx[tokens.UNK]
-            end
+		next_word[1][1] = word2idx[tokens.UNK]
             else
                 if word2idx[word] == nil then
                     idx2word[#idx2word + 1] = word
                     word2idx[word] = #idx2word
                 end
-                x[1][first_t] = word2idx[word]
-                x[2][first_t] = word2idx[word]
-            end
-            chars = split_word(next_word)
+		next_word[1][1] = word2idx[word]
+            end 
+            x[1][first_t] = next_word 
+            x[2][first_t] = next_word 
+	    sampled[{{}, {first_t, first_t}}]:copy(next_word)
+	    chars = split_word(next_word)
             for i = 1, math.min(#chars, loader.max_word_l) do
                 x_char[1][first_t][i] = chars[i]
                 x_char[2][first_t][i] = chars[i]
             end
             first_t = first_t + 1
         end
+	local lst = nil
         for t = 1, first_t-1 do
-            local lst = protos.rnn:forward(get_input(x, x_char, t, rnn_state[0]))
+            lst = protos.rnn:forward(get_input(x, x_char, t, rnn_state[0]))
             rnn_state[0] = {}
             for i=1,#init_state do table.insert(rnn_state[0], lst[i]) end
         end
@@ -177,17 +181,14 @@ function sample()
         for i = 1, #idx2word do
             scores[1][i] = -protos.criterion:forward(prediction, i)
         end
-    else
-        scores = torch.ones(1, #idx2word)
-    end
+   end
 
     if opt.gpuid >= 0 then
         x = x:float():cuda()
         x_char = x_char:float():cuda()
     end
-    protos.rnn:evaluate() 
-
-    local _, next_word = nil, nil
+    protos.rnn:evaluate()
+ 
     for t = first_t, T do
         if sample == 0 then
             _, next_word = scores:max(3)
@@ -221,6 +222,10 @@ function sample()
         for i = 1, encoded:size(1) do
             local ind = encoded[i]
             local token = idx2word[ind]
+	    if token == nil then
+		print(ind)
+		print(i)
+	    end
             s = s ..' '.. token
         end
         return s
