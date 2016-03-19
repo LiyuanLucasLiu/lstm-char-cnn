@@ -120,11 +120,15 @@ function eval_split_full(split_idx)
     end
     protos.rnn:evaluate() 
     for t = 1, x:size(2) do
+	print(get_input(x, x_char, t, rnn_state[0])[1])
 	local lst = protos.rnn:forward(get_input(x, x_char, t, rnn_state[0]))
 	rnn_state[0] = {}
 	for i=1,#init_state do table.insert(rnn_state[0], lst[i]) end
 	prediction = lst[#lst] 
+	print(y[{{1,2},t}])
+	io.read()
 	local singleton_loss = protos.criterion:forward(prediction, y[{{1,2},t}])
+	print(protos.criterion.output_tensor)
 	loss = loss + singleton_loss
 	local token_idx = x[1][t]
 	token_count[token_idx] = token_count[token_idx] + 1
