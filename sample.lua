@@ -58,16 +58,16 @@ LSTMTDNN = require 'model.LSTMTDNN'
 checkpoint = torch.load(opt2.model)
 opt = checkpoint.opt
 protos = checkpoint.protos
-print('opt: ')
-print(opt)
-print('val_losses: ')
-print(checkpoint.val_losses)
+--print('opt: ')
+--print(opt)
+--print('val_losses: ')
+--print(checkpoint.val_losses)
 idx2word, word2idx, idx2char, char2idx = table.unpack(checkpoint.vocab)
 
 -- recreate the data loader class
 loader = BatchLoader.create(opt.data_dir, opt.batch_size, opt.seq_length, opt.padding, opt.max_word_l)
-print('Word vocab size: ' .. #loader.idx2word .. ', Char vocab size: ' .. #loader.idx2char
-	    .. ', Max word length (incl. padding): ', loader.max_word_l)
+--print('Word vocab size: ' .. #loader.idx2word .. ', Char vocab size: ' .. #loader.idx2char
+--	    .. ', Max word length (incl. padding): ', loader.max_word_l)
 
 -- the initial state of the cell/hidden states
 init_state = {}
@@ -184,7 +184,7 @@ function sample()
         x[1][t]=next_word
         x[2][t]=next_word
         chars = split_word(next_word)
-	    print(loader.max_word_l)
+	    --print(loader.max_word_l)
         for i = 1, math.min(#chars, loader.max_word_l) do
             x_char[1][t][i] = chars[i]
             x_char[2][t][i] = chars[i]
@@ -194,8 +194,15 @@ function sample()
     	for i=1,#init_state do table.insert(rnn_state[0], lst[i]) end
     	prediction = lst[#lst] 
         for i = 1, #idx2word do
-            scores[i] = protos.criterion:forward(prediction, i)
+            scores[1][i] = -protos.criterion:forward(prediction, i)
         end
+--[[	for i = 1, #idx2word do
+	    print(scores[1][i])
+	    print(prediction[1][i])
+	    io.read()
+	end
+	io.read()
+--]]
     end
     function decode(encoded)
         assert(torch.isTensor(encoded) and encoded:dim() == 1)
@@ -203,7 +210,7 @@ function sample()
         for i = 1, encoded:size(1) do
             local ind = encoded[i]
             local token = idx2word[ind]
-            s = s .. token
+            s = s ..' '.. token
         end
         return s
     end
@@ -211,5 +218,6 @@ function sample()
 end
 
 test_results = sample()
+print(test_results)
 torch.save(opt2.savefile, test_results)
 collectgarbage()
