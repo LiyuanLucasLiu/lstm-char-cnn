@@ -1,6 +1,7 @@
 ##Added Sample.lua
 sample.lua is used to sample text from trained language model
 
+other code is forked from the original lstm-char-cnn
 ## Character-Aware Neural Language Models
 Code for the paper [Character-Aware Neural Language Models](http://arxiv.org/abs/1508.06615) 
 (AAAI 2016).
