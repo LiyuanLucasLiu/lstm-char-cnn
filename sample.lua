@@ -92,7 +92,6 @@ else
 end
 
 tokens = opt.tokens
-
 -- for easy switch between using words/chars (or both)
 function get_input(x, x_char, t, prev_states)
     local u = {}
