@@ -1,4 +1,4 @@
-##Added Sample.lua
+## Added Sample.lua
 sample.lua is used to sample text from trained language model
 
 other code is forked from the original lstm-char-cnn
